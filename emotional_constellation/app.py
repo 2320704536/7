@@ -298,17 +298,16 @@ def render_constellation(
     plt.close(fig)
     buf.seek(0)
 
-    fg = Image.open(buf).convert("RGBA")
-bloom = fg.filter(ImageFilter.GaussianBlur(radius=1.0))
+       fg = Image.open(buf).convert("RGBA")
+    bloom = fg.filter(ImageFilter.GaussianBlur(radius=1.0))
 
-# 🔧 ensure same size before compositing
-bg_rgba = bg.convert("RGBA")
-if bg_rgba.size != fg.size:
-    bg_rgba = bg_rgba.resize(fg.size, Image.LANCZOS)
+    # 🔧 Ensure background and foreground have same size before blending
+    bg_rgba = bg.convert("RGBA")
+    if bg_rgba.size != fg.size:
+        bg_rgba = bg_rgba.resize(fg.size, Image.LANCZOS)
 
-comp_img = Image.alpha_composite(bg_rgba, bloom)
-comp_img = Image.alpha_composite(comp_img, fg)
-
+    comp_img = Image.alpha_composite(bg_rgba, bloom)
+    comp_img = Image.alpha_composite(comp_img, fg)
 
     out = BytesIO()
     comp_img.save(out, format="PNG")
