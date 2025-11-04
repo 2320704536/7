@@ -13,9 +13,8 @@ from datetime import date
 # =========================
 # App setup
 # =========================
-st.set_page_config(page_title="Emotional Constellation — Color-Coded + Custom RGB", page_icon="✨", layout="wide")
-st.title("🌌 Emotional Constellation — Color-Coded + Custom RGB Palette")
-st.caption("English UI • One fixed color per emotion • CSV RGB editor • Galaxy visuals • Logical sidebar • Always colorful & full.")
+st.set_page_config(page_title="Emotional Constellation — Wang Xinru — Final Project", page_icon="✨", layout="wide")
+st.title("🌌 Emotional Constellation — Wang Xinru — Final Project")
 
 # =========================
 # Resources
@@ -76,12 +75,6 @@ DEFAULT_RGB = {
     "trust":      (60, 179, 113),   # Medium Sea Green
     "confusion":  (221, 160, 221),  # Plum
     "mixed":      (0, 255, 170),    # Teal-ish
-}
-COLOR_NAMES = {
-    "joy":"Gold","love":"Hot Pink","pride":"Violet","hope":"Lime Green","curiosity":"Turquoise","calm":"Sky Blue",
-    "surprise":"Orange","neutral":"Silver","sadness":"Steel Blue","anger":"Orange Red","fear":"Medium Purple","disgust":"Olive Drab",
-    "anxiety":"Goldenrod","boredom":"Dark Gray","nostalgia":"Peach Puff","gratitude":"Aquamarine","awe":"Light Cyan","trust":"Medium Sea Green",
-    "confusion":"Plum","mixed":"Teal"
 }
 ALL_EMOTIONS = list(DEFAULT_RGB.keys())
 
@@ -149,9 +142,6 @@ def stratified_positions(n, rng):
             xs.append(np.clip(x0, 0.02, 0.98)); ys.append(np.clip(y0, 0.06, 0.94))
     return np.array(xs), np.array(ys)
 
-def rgb255_to_unit(rgb):
-    r,g,b = rgb; return (r/255.0, g/255.0, b/255.0)
-
 # =========================
 # Palette state (CSV + custom)
 # =========================
@@ -160,17 +150,17 @@ def init_palette_state():
     if "custom_palette" not in st.session_state: st.session_state["custom_palette"] = {}  # {emotion:(r,g,b)}
 
 def get_active_palette():
-    """Returns dict emotion -> (r,g,b) in 0..255 based on CSV/custom toggle."""
-    # If CSV editor is enabled and user provided entries (custom_palette), override defaults.
+    """Return emotion -> (r,g,b) based on CSV/custom toggle."""
     if st.session_state.get("use_csv_palette") and st.session_state.get("custom_palette"):
         return dict(st.session_state["custom_palette"])
-    # otherwise: defaults + any custom additions (non-destructive merge)
     merged = dict(DEFAULT_RGB)
     merged.update(st.session_state.get("custom_palette", {}))
     return merged
 
 def add_custom_emotion(emotion: str, r: int, g: int, b: int):
-    if not emotion: return
+    if not emotion: 
+        st.warning("Emotion name cannot be empty.")
+        return
     r = int(np.clip(r, 0, 255)); g = int(np.clip(g, 0, 255)); b = int(np.clip(b, 0, 255))
     st.session_state["custom_palette"][emotion.strip()] = (r, g, b)
 
@@ -178,13 +168,14 @@ def import_palette_csv(file):
     """CSV columns: emotion,r,g,b"""
     try:
         dfc = pd.read_csv(file)
+        cols_lower = [c.lower() for c in dfc.columns]
         needed = {"emotion","r","g","b"}
-        if not needed.issubset(set([c.lower() for c in dfc.columns])):
+        if not needed.issubset(set(cols_lower)):
             st.error("CSV must include columns: emotion, r, g, b")
             return
-        # normalize column names
-        cols = {c.lower():c for c in dfc.columns}
-        em = cols.get("emotion","emotion"); rc = cols.get("r","r"); gc = cols.get("g","g"); bc = cols.get("b","b")
+        # normalize
+        colmap = {c.lower(): c for c in dfc.columns}
+        em = colmap["emotion"]; rc = colmap["r"]; gc = colmap["g"]; bc = colmap["b"]
         pal = {}
         for _, row in dfc.iterrows():
             emo = str(row[em]).strip()
@@ -206,7 +197,7 @@ def export_palette_csv(palette_dict: dict) -> BytesIO:
 # =========================
 # Enrichment & density (visual only)
 # =========================
-def enrich_and_balance(df, active_palette, rng, min_emotions=8, target_points=900):
+def enrich_and_balance(df, active_palette, rng, min_emotions=6, target_points=450):
     df = df.copy()
 
     # safety guard
@@ -218,19 +209,19 @@ def enrich_and_balance(df, active_palette, rng, min_emotions=8, target_points=90
         raise ValueError("missing 'emotion' column before enrichment")
 
     present = df["emotion"].unique().tolist()
-
-    # use CSV/custom palette keys as the pool to ensure one fixed color per emotion
     palette_keys = list(active_palette.keys())
-    need = max(0, min_emotions - len(set(present)))
+
     if "viz_emotion" not in df.columns:
         df["viz_emotion"] = df["emotion"]
         df["_is_visual_only"] = False
 
+    # Ensure at least min_emotions distinct colors visually
+    need = max(0, min_emotions - len(set(present)))
     if need > 0:
         extra = [e for e in palette_keys if e not in present]
         rng.shuffle(extra)
         chosen = extra[:need] if need <= len(extra) else extra
-        inject_n = max(8, len(df) // max(6, len(present) or 1))
+        inject_n = max(6, len(df) // max(6, len(present) or 1))
         fake_rows = []
         for emo in chosen:
             pick = min(inject_n, len(df))
@@ -243,12 +234,14 @@ def enrich_and_balance(df, active_palette, rng, min_emotions=8, target_points=90
         if fake_rows:
             df = pd.concat([df, pd.DataFrame(fake_rows)], ignore_index=True)
 
+    # Density upsample to target_points (sparser than before)
     if len(df) < target_points:
         need_more = target_points - len(df)
-        idxs = rng.integers(0, len(df), size=need_more)
-        extra = df.iloc[idxs].copy()
-        extra["_dup"] = True
-        df = pd.concat([df, extra], ignore_index=True)
+        if len(df) > 0:
+            idxs = rng.integers(0, len(df), size=need_more)
+            extra = df.iloc[idxs].copy()
+            extra["_dup"] = True
+            df = pd.concat([df, extra], ignore_index=True)
 
     df = df.sample(frac=1.0, random_state=rng.integers(0,1_000_000)).reset_index(drop=True)
     return df
@@ -257,7 +250,7 @@ def enrich_and_balance(df, active_palette, rng, min_emotions=8, target_points=90
 # Renderer
 # =========================
 def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name: str, layers: list,
-                         width: int, height: int, seed: int, size_scale: float, connect_k: int):
+                         width: int, height: int, seed: int, size_scale: float, connect_k: int, starfield_factor: float):
     rng = np.random.default_rng(seed)
     center_rgb, edge_rgb, small_colors = THEMES[theme_name]
     bg = draw_radial_gradient(width, height, center_rgb, edge_rgb) if "Background" in layers else Image.new("RGB",(width,height),(0,0,0))
@@ -270,8 +263,8 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
 
     comp = df_viz["compound"].astype(float).to_numpy()
     intensity = np.clip(np.abs(comp), 0, 1)
-    sizes = (14 + 220 * (intensity**0.85) * size_scale).tolist()
-    alphas = (0.30 + 0.65 * intensity).tolist()
+    sizes = (12 + 200 * (intensity**0.85) * size_scale).tolist()
+    alphas = (0.28 + 0.62 * intensity).tolist()
 
     # colors from active palette — one fixed color per emotion
     main_colors = []
@@ -279,19 +272,20 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
         rgb = active_palette.get(emo, active_palette.get("mixed", (0,255,170)))
         main_colors.append(tuple(c/255.0 for c in rgb))
 
-    # Small starfield
+    # Small starfield (sparser, tied to starfield_factor)
     if "Small Stars" in layers:
-        num_small = max(450, n)
+        base_small = int(np.clip(300 * starfield_factor, 120, 600))
+        num_small = max(base_small, int(n * 0.4))
         s_x = rng.uniform(0.0,1.0,size=num_small)
         s_y = rng.uniform(0.0,1.0,size=num_small)
-        s_s = rng.uniform(3,14,size=num_small)
-        s_a = rng.uniform(0.06,0.22,size=num_small)
-        s_c = [small_colors[0] if rng.random()<0.6 else small_colors[1] for _ in range(num_small)]
+        s_s = rng.uniform(2,12,size=num_small)
+        s_a = rng.uniform(0.05,0.18,size=num_small)
+        s_c = [small_colors[0] if rng.random()<0.65 else small_colors[1] for _ in range(num_small)]
         ax.scatter(s_x, s_y, s=s_s, c=s_c, alpha=s_a, linewidths=0, marker="o")
 
     # Glow
     if "Glow" in layers and n>0:
-        ax.scatter(xs, ys, s=[s*3.2 for s in sizes], c=main_colors, alpha=[a*0.18 for a in alphas], linewidths=0, marker="o")
+        ax.scatter(xs, ys, s=[s*3.0 for s in sizes], c=main_colors, alpha=[a*0.16 for a in alphas], linewidths=0, marker="o")
 
     # Main stars
     if "Main Stars" in layers and n>0:
@@ -304,7 +298,7 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
             d = np.sum((pts - pts[i])**2, axis=1)
             nn = np.argsort(d)[1:1+max(1, connect_k)]
             for j in nn:
-                ax.plot([pts[i,0], pts[j,0]],[pts[i,1], pts[j,1]], linewidth=0.35, alpha=0.12, c="white")
+                ax.plot([pts[i,0], pts[j,0]],[pts[i,1], pts[j,1]], linewidth=0.35, alpha=0.10, c="white")
 
     # Composite & bloom (size-safe)
     buf = BytesIO()
@@ -331,9 +325,9 @@ with st.expander("Instructions", expanded=False):
 **How to use**
 1) **Data Source**: choose source of texts.  
 2) **Visualization Style**: theme, layers.  
-3) **Emotion Mapping**: color diversity, emotion filter.  
-4) **Custom Palette (optional)**: add emotions with RGB, or import/export CSV.  
-5) **Rendering Options**: randomness, size, density, connections.  
+3) **Emotion Mapping**: filter emotions and compound range.  
+4) **Custom Palette (RGB)**: add emotions with RGB, or import/export CSV.  
+5) **Rendering Options**: randomness, size, star density, connections.  
 6) **Output**: download or reset.  
 """)
 
@@ -395,27 +389,25 @@ st.sidebar.header("3) Emotion Mapping")
 cmp_min, cmp_max = st.sidebar.slider("Compound range:", -1.0, 1.0, (-1.0, 1.0), 0.01)
 available_emotions = sorted(df["emotion"].unique().tolist())
 
-# Build label like "joy (Gold)"
-def emotion_label(e):
-    cname = COLOR_NAMES.get(e, "")
-    return f"{e} ({cname})" if cname else e
+def label_with_rgb(e: str, pal: dict):
+    rgb = pal.get(e, DEFAULT_RGB.get(e, (0,0,0)))
+    return f"{e} ({rgb[0]},{rgb[1]},{rgb[2]})"
 
-selected_emotions_labels = st.sidebar.multiselect(
-    "Show emotions:",
-    options=[emotion_label(e) for e in ALL_EMOTIONS],
-    default=[emotion_label(e) for e in available_emotions]
-)
-selected_emotions = [e.split(" ")[0] for e in selected_emotions_labels]  # take token before " ("
+# Build labels using ACTIVE palette later (after palette section); temporarily with DEFAULT
+temp_labels = [label_with_rgb(e, DEFAULT_RGB) for e in ALL_EMOTIONS]
+temp_defaults = [label_with_rgb(e, DEFAULT_RGB) for e in available_emotions]
+selected_labels = st.sidebar.multiselect("Show emotions:", options=temp_labels, default=temp_defaults)
+selected_emotions = [lbl.split(" (")[0] for lbl in selected_labels]
 df = df[(df["emotion"].isin(selected_emotions)) & (df["compound"] >= cmp_min) & (df["compound"] <= cmp_max)].reset_index(drop=True)
 
-# ---- 4) Custom Palette (optional) — RGB editor
-st.sidebar.header("4) Custom Palette (optional)")
+# ---- 4) Custom Palette (RGB)
+st.sidebar.header("4) Custom Palette (RGB)")
 init_palette_state()
 use_csv = st.sidebar.checkbox("Use CSV palette (RGB editor)", value=st.session_state["use_csv_palette"])
 st.session_state["use_csv_palette"] = use_csv
 
 with st.sidebar.expander("Add Custom Emotion (RGB 0–255)", expanded=False):
-    c1, c2, c3, c4 = st.columns([1.6,1,1,1])
+    c1, c2, c3, c4 = st.columns([1.8,1,1,1])
     emo_name = c1.text_input("Emotion name")
     r = c2.number_input("R (0–255)", 0, 255, 255, 1)
     g = c3.number_input("G (0–255)", 0, 255, 255, 1)
@@ -424,30 +416,50 @@ with st.sidebar.expander("Add Custom Emotion (RGB 0–255)", expanded=False):
         add_custom_emotion(emo_name, r, g, b)
         st.success(f"Added: {emo_name} = ({r},{g},{b})")
 
-with st.sidebar.expander("Import / Export CSV", expanded=False):
+with st.sidebar.expander("Edit Palette / Import & Export CSV", expanded=False):
     upcsv = st.file_uploader("Import palette CSV (emotion,r,g,b)", type=["csv"])
     if upcsv is not None:
         import_palette_csv(upcsv)
-    pal_now = get_active_palette()
-    dl = export_palette_csv(pal_now)
-    st.download_button("Download CSV", data=dl, file_name="palette.csv", mime="text/csv", use_container_width=True)
+    # Live table of current palette (what user has added so far)
+    current_pal = dict(DEFAULT_RGB)
+    current_pal.update(st.session_state.get("custom_palette", {}))
+    if st.session_state.get("use_csv_palette"):
+        # When CSV mode is ON, show ONLY custom palette (overrides)
+        current_pal = dict(st.session_state.get("custom_palette", {}))
+    if current_pal:
+        pal_df = pd.DataFrame([{"emotion":k, "r":v[0], "g":v[1], "b":v[2]} for k,v in sorted(current_pal.items())])
+        st.dataframe(pal_df, use_container_width=True, height=220)
+        dl = export_palette_csv(current_pal)
+        st.download_button("Download CSV", data=dl, file_name="palette.csv", mime="text/csv", use_container_width=True)
+    else:
+        st.info("No colors yet. Add emotions above or import a CSV.")
 
-# Active palette for rendering
+# Active palette for rendering (after user actions)
 ACTIVE_PALETTE = get_active_palette()
+
+# Now rebuild the emotion selector labels to reflect ACTIVE palette RGB
+final_labels_options = [label_with_rgb(e, ACTIVE_PALETTE) for e in ALL_EMOTIONS]
+final_labels_default = [label_with_rgb(e, ACTIVE_PALETTE) for e in available_emotions]
+# If the user already made a selection, map to new labels; else preserve defaults
+if selected_labels:
+    selected_emotions = [lbl.split(" (")[0] for lbl in selected_labels]
+    selected_labels = [label_with_rgb(e, ACTIVE_PALETTE) for e in selected_emotions]
+else:
+    selected_labels = final_labels_default
+st.sidebar.multiselect("Show emotions (updated):", options=final_labels_options, default=selected_labels, key="em_reselect")
 
 # ---- 5) Rendering Options
 st.sidebar.header("5) Rendering Options")
 seed = st.sidebar.number_input("Random seed:", min_value=0, max_value=2_000_000_000, value=42, step=1)
 size_scale = st.sidebar.slider("Main star size scale:", 0.5, 2.0, 1.0, 0.05)
-min_colors = st.sidebar.slider("Minimum distinct colors (visual only):", 3, 12, 8, 1)
-target_points = st.sidebar.slider("Fullness target points:", 300, 3000, 900, 50)
+target_points = st.sidebar.slider("Star Density (points):", 50, 1000, 450, 25)
 connect_k = st.sidebar.slider("Connections per star:", 0, 4, 2, 1)
 
 # Prepare visualization df (enrichment & density)
 rng = np.random.default_rng(seed)
-df_viz = enrich_and_balance(df, active_palette=ACTIVE_PALETTE, rng=rng, min_emotions=min_colors, target_points=target_points)
+df_viz = enrich_and_balance(df, active_palette=ACTIVE_PALETTE, rng=rng, min_emotions=6, target_points=target_points)
 
-# Output controls
+# ---- 6) Output
 st.sidebar.header("6) Output")
 if st.sidebar.button("Reset all settings"):
     st.session_state.clear(); st.rerun()
@@ -461,23 +473,23 @@ with left:
     if df_viz.empty:
         st.warning("No data points under current filters.")
     else:
+        # starfield_factor roughly scales small star count relative to density choice
+        starfield_factor = np.clip(target_points / 450.0, 0.6, 2.0)
         img_buf = render_constellation(
             df_viz=df_viz, active_palette=ACTIVE_PALETTE, theme_name=theme_name, layers=selected_layers,
-            width=1600, height=900, seed=seed, size_scale=size_scale, connect_k=connect_k
+            width=1600, height=900, seed=seed, size_scale=size_scale, connect_k=connect_k, starfield_factor=starfield_factor
         )
         st.image(img_buf, caption=f"Emotional Constellation — {theme_name}", use_column_width=True)
         st.download_button("💾 Download PNG", data=img_buf, file_name="emotional_constellation.png", mime="image/png")
 
 with right:
     st.subheader("📊 Data & Emotions")
-    # Show emotion with color name in table
     df_show = df.copy()
-    df_show["emotion_label"] = df_show["emotion"].apply(lambda e: emotion_label(e))
+    df_show["emotion_label"] = df_show["emotion"].apply(lambda e: f"{e} ({ACTIVE_PALETTE.get(e, (0,0,0))[0]},{ACTIVE_PALETTE.get(e,(0,0,0))[1]},{ACTIVE_PALETTE.get(e,(0,0,0))[2]})")
     cols = ["text", "emotion_label", "compound", "pos", "neu", "neg"]
     if "timestamp" in df.columns: cols.insert(1, "timestamp")
     if "source" in df.columns: cols.insert(2, "source")
     st.dataframe(df_show[cols], use_container_width=True, height=520)
 
-# Footer
 st.markdown("---")
-st.caption("Made with ❤️ — One fixed color per emotion. Custom RGB palette with CSV editor. Galaxy visuals. © 2025")
+st.caption("© 2025")
