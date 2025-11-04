@@ -412,7 +412,8 @@ df_viz = enrich_and_balance(df, palette_name=palette_name, rng=rng,
 st.sidebar.header("5) Output")
 if st.sidebar.button("Reset all settings"):
     st.session_state.clear()
-    st.experimental_rerun()
+    st.rerun()
+
 
 # =========================
 # Draw & table
