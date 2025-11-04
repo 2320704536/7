@@ -190,8 +190,14 @@ def enrich_and_balance(df, palette_name, rng, min_emotions=8, target_points=900)
     df = df.copy()
     cmap = PALETTES.get(palette_name, PALETTES["vivid"])
 
+    # 🛡️ Safety guard: if df is empty, return an empty DataFrame
+    if df.empty or len(df) == 0:
+        st.warning("No valid data available for visualization.")
+        return pd.DataFrame(columns=["viz_emotion", "compound"])
+
     if "emotion" not in df.columns:
         raise ValueError("missing 'emotion' column before enrichment")
+
 
     present = df["emotion"].unique().tolist()
     need = max(0, min_emotions - len(present))
