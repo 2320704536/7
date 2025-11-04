@@ -291,14 +291,14 @@ def render_constellation(
                 ax.plot([pts[i,0], pts[j,0]], [pts[i,1], pts[j,1]],
                         linewidth=0.35, alpha=0.12, c="white")
 
-    # Composite with bloom
+        # Export & composite with bloom
     buf = BytesIO()
     plt.tight_layout(pad=0)
     plt.savefig(buf, format="png", transparent=True, bbox_inches="tight", pad_inches=0)
     plt.close(fig)
     buf.seek(0)
 
-       fg = Image.open(buf).convert("RGBA")
+    fg = Image.open(buf).convert("RGBA")
     bloom = fg.filter(ImageFilter.GaussianBlur(radius=1.0))
 
     # 🔧 Ensure background and foreground have same size before blending
