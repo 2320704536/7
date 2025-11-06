@@ -51,47 +51,63 @@ def fetch_news(api_key, keyword="technology", page_size=50):
         return pd.DataFrame()
 
 # =========================
-# Built-in fixed colors (one per emotion) — RGB 0..255
+# Planetary Palette (one fixed color per emotion, soft & natural)
 # =========================
 DEFAULT_RGB = {
-    "joy":        (255, 215, 0),    # Gold
-    "love":       (255, 105, 180),  # Hot Pink
-    "pride":      (238, 130, 238),  # Violet
-    "hope":       (50, 205, 50),    # Lime Green
-    "curiosity":  (64, 224, 208),   # Turquoise
-    "calm":       (135, 206, 235),  # Sky Blue
-    "surprise":   (255, 165, 0),    # Orange
-    "neutral":    (192, 192, 192),  # Silver
-    "sadness":    (70, 130, 180),   # Steel Blue
-    "anger":      (255, 69, 0),     # Orange Red
-    "fear":       (147, 112, 219),  # Medium Purple
-    "disgust":    (107, 142, 35),   # Olive Drab
-    "anxiety":    (218, 165, 32),   # Goldenrod
-    "boredom":    (169, 169, 169),  # Dark Gray
-    "nostalgia":  (255, 218, 185),  # Peach Puff
-    "gratitude":  (127, 255, 212),  # Aquamarine
-    "awe":        (224, 255, 255),  # Light Cyan
-    "trust":      (60, 179, 113),   # Medium Sea Green
-    "confusion":  (221, 160, 221),  # Plum
-    "mixed":      (0, 255, 170),    # Teal-ish
+    "joy":        (230, 200, 110),  # Warm Jupiter Gold
+    "love":       (235, 180, 175),  # Venus Rose
+    "pride":      (200, 170, 210),  # Saturn Violet
+    "hope":       (160, 220, 200),  # Uranus Mint
+    "curiosity":  (175, 210, 200),  # Soft Turquoise (planetary)
+    "calm":       (140, 180, 230),  # Neptune Blue
+    "surprise":   (240, 190, 150),  # Dawn Peach
+    "neutral":    (180, 180, 185),  # Lunar Gray
+    "sadness":    (100, 130, 180),  # Deep Ocean Blue
+    "anger":      (180, 80, 70),    # Mars Red
+    "fear":       (130, 110, 160),  # Shadow Purple
+    "disgust":    (130, 140, 110),  # Olive Gray
+    "anxiety":    (210, 190, 140),  # Desert Sand
+    "boredom":    (120, 120, 130),  # Slate Gray
+    "nostalgia":  (235, 220, 190),  # Pale Cream
+    "gratitude":  (175, 220, 220),  # Soft Cyan
+    "awe":        (190, 230, 240),  # Ice Blue
+    "trust":      (100, 170, 160),  # Sea Teal
+    "confusion":  (210, 170, 175),  # Dust Pink
+    "mixed":      (210, 190, 140),  # Pale Gold
 }
 ALL_EMOTIONS = list(DEFAULT_RGB.keys())
 
-# English color names for built-ins (customs will show as "Custom r,g,b")
+# English color names for UI (customs will show as "Custom r,g,b")
 COLOR_NAMES = {
-    "joy":"Gold","love":"Hot Pink","pride":"Violet","hope":"Lime Green","curiosity":"Turquoise","calm":"Sky Blue",
-    "surprise":"Orange","neutral":"Silver","sadness":"Steel Blue","anger":"Orange Red","fear":"Medium Purple","disgust":"Olive Drab",
-    "anxiety":"Goldenrod","boredom":"Dark Gray","nostalgia":"Peach Puff","gratitude":"Aquamarine","awe":"Light Cyan","trust":"Medium Sea Green",
-    "confusion":"Plum","mixed":"Teal"
+    "joy": "Warm Jupiter Gold",
+    "love": "Venus Rose",
+    "pride": "Saturn Violet",
+    "hope": "Uranus Mint",
+    "curiosity": "Soft Turquoise",
+    "calm": "Neptune Blue",
+    "surprise": "Dawn Peach",
+    "neutral": "Lunar Gray",
+    "sadness": "Deep Ocean Blue",
+    "anger": "Mars Red",
+    "fear": "Shadow Purple",
+    "disgust": "Olive Gray",
+    "anxiety": "Desert Sand",
+    "boredom": "Slate Gray",
+    "nostalgia": "Pale Cream",
+    "gratitude": "Soft Cyan",
+    "awe": "Ice Blue",
+    "trust": "Sea Teal",
+    "confusion": "Dust Pink",
+    "mixed": "Pale Gold",
 }
 
 # =========================
-# Themes (radial background)
+# Themes (radial background) — subtle deep-space tones
 # =========================
 THEMES = {
-    "Galaxy Blue": ((0.06, 0.09, 0.20), (0.00, 0.00, 0.00), [(0.92,0.95,1.0), (0.80,0.86,1.0)]),
-    "Warm Nebula": ((0.12, 0.06, 0.18), (0.00, 0.00, 0.00), [(1.00,0.92,0.88), (0.98,0.85,0.92)]),
-    "Aurora Mist": ((0.05, 0.12, 0.12), (0.00, 0.00, 0.00), [(0.90,1.00,0.98), (0.85,0.95,1.00)]),
+    "Galaxy Blue": ((0.05, 0.08, 0.18), (0.00, 0.00, 0.00), [(0.85,0.90,1.0), (0.78,0.82,0.95)]),
+    "Warm Nebula": ((0.11, 0.06, 0.15), (0.00, 0.00, 0.00), [(0.98,0.92,0.88), (0.96,0.84,0.90)]),
+    "Aurora Mist": ((0.05, 0.11, 0.11), (0.00, 0.00, 0.00), [(0.88,0.98,0.98), (0.84,0.94,0.98)]),
 }
 
 # =========================
@@ -292,10 +308,10 @@ def render_constellation(
     base_alpha = (0.28 + 0.62 * intensity)
     alphas = np.clip(base_alpha * star_opacity, 0.05, 1.0).tolist()
 
-    # colors from active palette — one fixed color per emotion
+    # colors from active palette — one fixed planetary color per emotion
     main_colors = []
     for emo in df_viz["viz_emotion"].tolist():
-        rgb = active_palette.get(emo, active_palette.get("mixed", (0,255,170)))
+        rgb = active_palette.get(emo, active_palette.get("mixed", (210,190,140)))  # safe planetary fallback
         main_colors.append(tuple(c/255.0 for c in rgb))
 
     # Small starfield (sparser, tied to starfield_factor)
@@ -309,7 +325,7 @@ def render_constellation(
         s_c = [small_colors[0] if rng.random()<0.65 else small_colors[1] for _ in range(num_small)]
         ax.scatter(s_x, s_y, s=s_s, c=s_c, alpha=s_a, linewidths=0, marker="o")
 
-    # Glow
+    # Glow (planetary toned)
     if "Glow" in layers and n>0:
         glow_alpha = np.clip((np.array(alphas) * (0.16 * glow_intensity)), 0.02, 0.8).tolist()
         ax.scatter(xs, ys, s=[s*3.0 for s in sizes], c=main_colors, alpha=glow_alpha, linewidths=0, marker="o")
@@ -318,7 +334,7 @@ def render_constellation(
     if "Main Stars" in layers and n>0:
         ax.scatter(xs, ys, s=sizes, c=main_colors, alpha=alphas, linewidths=0, marker="o")
 
-    # Constellation lines
+    # Constellation lines (soft white)
     if "Constellation Lines" in layers and n>=3:
         line_alpha = np.clip(0.02 + 0.3*line_brightness, 0.0, 1.0)
         pts = np.column_stack([xs, ys])
@@ -416,9 +432,9 @@ st.session_state["use_csv_palette"] = use_csv
 with st.sidebar.expander("Add Custom Emotion (RGB 0–255)", expanded=False):
     c1, c2, c3, c4 = st.columns([1.8, 1, 1, 1])
     emo_name = c1.text_input("Emotion name")
-    r = c2.number_input("R (0–255)", 0, 255, 255, 1)
-    g = c3.number_input("G (0–255)", 0, 255, 255, 1)
-    b = c4.number_input("B (0–255)", 0, 255, 255, 1)
+    r = c2.number_input("R (0–255)", 0, 255, 210, 1)
+    g = c3.number_input("G (0–255)", 0, 255, 190, 1)
+    b = c4.number_input("B (0–255)", 0, 255, 140, 1)
     if st.button("Add Emotion", use_container_width=True):
         add_custom_emotion(emo_name, r, g, b)
         st.success(f"Added: {emo_name} = ({r},{g},{b})")
@@ -451,13 +467,13 @@ with st.sidebar.expander("Edit Palette / Import & Export CSV", expanded=False):
 ACTIVE_PALETTE = get_active_palette()
 
 def emotion_label_with_name(e: str, pal: dict) -> str:
-    """Return 'emotion (EnglishColorName)' or 'emotion (Custom r,g,b)'."""
+    """Return 'emotion (PlanetaryColorName)' or 'emotion (Custom r,g,b)'."""
     if e in COLOR_NAMES:
         return f"{e} ({COLOR_NAMES[e]})"
     rgb = pal.get(e, (0, 0, 0))
     return f"{e} (Custom {rgb[0]},{rgb[1]},{rgb[2]})"
 
-# Emotion selector with English color names
+# Emotion selector with planetary color names
 final_labels_options = [emotion_label_with_name(e, ACTIVE_PALETTE) for e in ALL_EMOTIONS]
 final_labels_default = [emotion_label_with_name(e, ACTIVE_PALETTE) for e in available_emotions]
 selected_labels = st.sidebar.multiselect("Show emotions:", options=final_labels_options, default=final_labels_default)
