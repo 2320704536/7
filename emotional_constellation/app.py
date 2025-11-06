@@ -77,7 +77,7 @@ DEFAULT_RGB = {
 }
 ALL_EMOTIONS = list(DEFAULT_RGB.keys())
 
-# 英文颜色名（仅内置；自定义将显示 Custom r,g,b）
+# English color names for built-ins (customs will show as "Custom r,g,b")
 COLOR_NAMES = {
     "joy":"Gold","love":"Hot Pink","pride":"Violet","hope":"Lime Green","curiosity":"Turquoise","calm":"Sky Blue",
     "surprise":"Orange","neutral":"Silver","sadness":"Steel Blue","anger":"Orange Red","fear":"Medium Purple","disgust":"Olive Drab",
@@ -327,7 +327,7 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
 with st.expander("Instructions", expanded=False):
     st.markdown("""
 **How to use**
-1) **Data Source**: choose source of texts.  
+1) **Data Source**: fetch texts via NewsAPI.  
 2) **Visualization Style**: theme, layers.  
 3) **Emotion Mapping**: filter emotions and compound range.  
 4) **Custom Palette (RGB)**: add emotions with RGB, or import/export CSV.  
@@ -335,43 +335,31 @@ with st.expander("Instructions", expanded=False):
 6) **Output**: download or reset.  
 """)
 
-# ---- 1) Data Source
-st.sidebar.header("1) Data Source")
-mode = st.sidebar.radio("Select data source:", ["Upload CSV", "Paste Text", "Fetch News"], index=0)
+# ---- 1) Data Source (NEWS ONLY)
+st.sidebar.header("1) Data Source (NewsAPI only)")
+kw = st.sidebar.text_input("Keyword (e.g., economy / technology / climate):", "technology")
+news_btn = st.sidebar.button("Fetch from NewsAPI", use_container_width=True)
+
 df = pd.DataFrame()
-if mode == "Upload CSV":
-    up = st.sidebar.file_uploader("Upload a CSV (must contain 'text')", type=["csv"])
-    if up is not None:
-        try: df = pd.read_csv(up)
-        except Exception: st.sidebar.error("Failed to read CSV. Check encoding and delimiter.")
-elif mode == "Paste Text":
-    txt = st.sidebar.text_area("Paste multiple lines (one text per line):", height=220,
-        placeholder="I love the sunset.\nMarkets look uncertain today.\nFeeling proud of our team.")
-    if st.sidebar.button("Add to dataset", use_container_width=True):
-        rows = [t for t in txt.splitlines() if t.strip()]
-        if rows:
-            df = pd.DataFrame({"text": rows}); df["timestamp"] = str(date.today())
-elif mode == "Fetch News":
-    kw = st.sidebar.text_input("Keyword (e.g., economy / technology / climate):", "technology")
-    if st.sidebar.button("Fetch from NewsAPI", use_container_width=True):
-        key = st.secrets.get("NEWS_API_KEY","")
-        if not key: st.sidebar.error("Missing NEWS_API_KEY. Add it in Streamlit Secrets.")
-        else: df = fetch_news(key, keyword=kw)
+if news_btn:
+    key = st.secrets.get("NEWS_API_KEY","")
+    if not key:
+        st.sidebar.error("Missing NEWS_API_KEY. Add it in Streamlit Secrets.")
+    else:
+        df = fetch_news(key, keyword=kw)
 
+# Fallback sample so app can render before first fetch
 if df.empty:
-    try:
-        df = pd.read_csv("sample_data.csv")
-        st.info("Using sample_data.csv (no data provided).")
-    except Exception:
-        df = pd.DataFrame({"text":[
-            "I can't believe how beautiful the sky is tonight!",
-            "The new update is fantastic and smooth.",
-            "Why is it raining again? Feeling a bit low.",
-            "Our team finally shipped the feature! Proud and grateful.",
-            "Markets look volatile; investors are anxious.",
-        ]})
-        df["timestamp"] = str(date.today())
+    df = pd.DataFrame({"text":[
+        "I can't believe how beautiful the sky is tonight!",
+        "The new update is fantastic and smooth.",
+        "Why is it raining again? Feeling a bit low.",
+        "Our team finally shipped the feature! Proud and grateful.",
+        "Markets look volatile; investors are anxious.",
+    ]})
+    df["timestamp"] = str(date.today())
 
+# Ensure dataset has 'text'
 if "text" not in df.columns:
     st.error("The dataset must include a 'text' column.")
     st.stop()
@@ -410,7 +398,7 @@ with st.sidebar.expander("Add Custom Emotion (RGB 0–255)", expanded=False):
     if st.button("Add Emotion", use_container_width=True):
         add_custom_emotion(emo_name, r, g, b)
         st.success(f"Added: {emo_name} = ({r},{g},{b})")
-    # 实时显示所有自定义项
+    # Live list of all custom items
     custom_now = st.session_state.get("custom_palette", {})
     if custom_now:
         df_custom = pd.DataFrame([{"emotion": k, "r": v[0], "g": v[1], "b": v[2]} for k, v in sorted(custom_now.items())])
@@ -422,7 +410,7 @@ with st.sidebar.expander("Edit Palette / Import & Export CSV", expanded=False):
     upcsv = st.file_uploader("Import palette CSV (emotion,r,g,b)", type=["csv"])
     if upcsv is not None:
         import_palette_csv(upcsv)
-    # 当前可见的配色表（合并或仅CSV）
+    # Visible palette (merged or only CSV depending on toggle)
     current_pal = dict(DEFAULT_RGB)
     current_pal.update(st.session_state.get("custom_palette", {}))
     if st.session_state.get("use_csv_palette"):
@@ -445,7 +433,7 @@ def emotion_label_with_name(e: str, pal: dict) -> str:
     rgb = pal.get(e, (0, 0, 0))
     return f"{e} (Custom {rgb[0]},{rgb[1]},{rgb[2]})"
 
-# ---- 3.5) Build the emotion selector using English color names
+# Emotion selector with English color names
 final_labels_options = [emotion_label_with_name(e, ACTIVE_PALETTE) for e in ALL_EMOTIONS]
 final_labels_default = [emotion_label_with_name(e, ACTIVE_PALETTE) for e in available_emotions]
 selected_labels = st.sidebar.multiselect("Show emotions:", options=final_labels_options, default=final_labels_default)
@@ -490,7 +478,6 @@ with left:
 with right:
     st.subheader("📊 Data & Emotions")
     df_show = df.copy()
-    # 显示英文颜色名或 Custom
     def label_for_table(e):
         if e in COLOR_NAMES: return f"{e} ({COLOR_NAMES[e]})"
         rgb = ACTIVE_PALETTE.get(e, (0,0,0))
