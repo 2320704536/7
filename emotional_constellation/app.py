@@ -253,10 +253,25 @@ def enrich_and_balance(df, active_palette, rng, min_emotions=6, target_points=45
 # =========================
 # Renderer
 # =========================
-def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name: str, layers: list,
-                         width: int, height: int, seed: int, size_scale: float, connect_k: int, starfield_factor: float):
+def adjust_brightness(rgb_tuple, factor):
+    """rgb in 0..1 tuple, multiply by factor with clipping."""
+    arr = np.array(rgb_tuple)
+    arr = np.clip(arr * factor, 0.0, 1.0)
+    return tuple(arr.tolist())
+
+def render_constellation(
+    df_viz: pd.DataFrame, active_palette: dict, theme_name: str, layers: list,
+    width: int, height: int, seed: int, size_scale: float, connect_k: int, starfield_factor: float,
+    glow_intensity: float, bg_brightness: float, star_opacity: float, size_jitter: float, line_brightness: float
+):
     rng = np.random.default_rng(seed)
+
+    # Theme colors + brightness
     center_rgb, edge_rgb, small_colors = THEMES[theme_name]
+    center_rgb = adjust_brightness(center_rgb, bg_brightness)
+    edge_rgb   = adjust_brightness(edge_rgb,   bg_brightness)
+    small_colors = [adjust_brightness(c, bg_brightness) for c in small_colors]
+
     bg = draw_radial_gradient(width, height, center_rgb, edge_rgb) if "Background" in layers else Image.new("RGB",(width,height),(0,0,0))
 
     fig, ax = plt.subplots(figsize=(width/100, height/100), dpi=100)
@@ -267,8 +282,15 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
 
     comp = df_viz["compound"].astype(float).to_numpy()
     intensity = np.clip(np.abs(comp), 0, 1)
-    sizes = (12 + 200 * (intensity**0.85) * size_scale).tolist()
-    alphas = (0.28 + 0.62 * intensity).tolist()
+
+    base_sizes = (12 + 200 * (intensity**0.85) * size_scale)
+    if size_jitter > 0:
+        jitter = rng.normal(0.0, size_jitter * 0.5, size=base_sizes.shape)
+        base_sizes = base_sizes * (1.0 + jitter)
+    sizes = np.clip(base_sizes, 3.0, None).tolist()
+
+    base_alpha = (0.28 + 0.62 * intensity)
+    alphas = np.clip(base_alpha * star_opacity, 0.05, 1.0).tolist()
 
     # colors from active palette — one fixed color per emotion
     main_colors = []
@@ -289,7 +311,8 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
 
     # Glow
     if "Glow" in layers and n>0:
-        ax.scatter(xs, ys, s=[s*3.0 for s in sizes], c=main_colors, alpha=[a*0.16 for a in alphas], linewidths=0, marker="o")
+        glow_alpha = np.clip((np.array(alphas) * (0.16 * glow_intensity)), 0.02, 0.8).tolist()
+        ax.scatter(xs, ys, s=[s*3.0 for s in sizes], c=main_colors, alpha=glow_alpha, linewidths=0, marker="o")
 
     # Main stars
     if "Main Stars" in layers and n>0:
@@ -297,12 +320,13 @@ def render_constellation(df_viz: pd.DataFrame, active_palette: dict, theme_name:
 
     # Constellation lines
     if "Constellation Lines" in layers and n>=3:
+        line_alpha = np.clip(0.02 + 0.3*line_brightness, 0.0, 1.0)
         pts = np.column_stack([xs, ys])
         for i in range(len(pts)):
             d = np.sum((pts - pts[i])**2, axis=1)
             nn = np.argsort(d)[1:1+max(1, connect_k)]
             for j in nn:
-                ax.plot([pts[i,0], pts[j,0]],[pts[i,1], pts[j,1]], linewidth=0.35, alpha=0.10, c="white")
+                ax.plot([pts[i,0], pts[j,0]],[pts[i,1], pts[j,1]], linewidth=0.35, alpha=line_alpha, c="white")
 
     # Composite & bloom (size-safe)
     buf = BytesIO()
@@ -331,7 +355,7 @@ with st.expander("Instructions", expanded=False):
 2) **Visualization Style**: theme, layers.  
 3) **Emotion Mapping**: filter emotions and compound range.  
 4) **Custom Palette (RGB)**: add emotions with RGB, or import/export CSV.  
-5) **Rendering Options**: randomness, size, star density, connections.  
+5) **Rendering Options**: randomness, size, star density, glow, background, opacity, lines.  
 6) **Output**: download or reset.  
 """)
 
@@ -442,12 +466,18 @@ selected_emotions = [lbl.split(" (")[0] for lbl in selected_labels]
 # filter df with selection and compound range
 df = df[(df["emotion"].isin(selected_emotions)) & (df["compound"] >= cmp_min) & (df["compound"] <= cmp_max)].reset_index(drop=True)
 
-# ---- 5) Rendering Options
+# ---- 5) Rendering Options (ENHANCED)
 st.sidebar.header("5) Rendering Options")
 seed = st.sidebar.number_input("Random seed:", min_value=0, max_value=2_000_000_000, value=42, step=1)
 size_scale = st.sidebar.slider("Main star size scale:", 0.5, 2.0, 1.0, 0.05)
 target_points = st.sidebar.slider("Star Density (points):", 50, 1000, 450, 25)
 connect_k = st.sidebar.slider("Connections per star:", 0, 4, 2, 1)
+
+glow_intensity  = st.sidebar.slider("Glow Intensity:", 0.1, 2.0, 1.0, 0.05)
+bg_brightness   = st.sidebar.slider("Background Brightness:", 0.2, 1.2, 1.0, 0.05)
+star_opacity    = st.sidebar.slider("Star Opacity:", 0.2, 1.0, 0.8, 0.05)
+size_jitter     = st.sidebar.slider("Star Size Randomness:", 0.0, 1.0, 0.3, 0.05)
+line_brightness = st.sidebar.slider("Line Brightness:", 0.0, 1.0, 0.2, 0.05)
 
 # Prepare visualization df (enrichment & density)
 rng = np.random.default_rng(seed)
@@ -470,7 +500,8 @@ with left:
         starfield_factor = np.clip(target_points / 450.0, 0.6, 2.0)
         img_buf = render_constellation(
             df_viz=df_viz, active_palette=ACTIVE_PALETTE, theme_name=theme_name, layers=selected_layers,
-            width=1600, height=900, seed=seed, size_scale=size_scale, connect_k=connect_k, starfield_factor=starfield_factor
+            width=1600, height=900, seed=seed, size_scale=size_scale, connect_k=connect_k, starfield_factor=starfield_factor,
+            glow_intensity=glow_intensity, bg_brightness=bg_brightness, star_opacity=star_opacity, size_jitter=size_jitter, line_brightness=line_brightness
         )
         st.image(img_buf, caption=f"Emotional Constellation — {theme_name}", use_column_width=True)
         st.download_button("💾 Download PNG", data=img_buf, file_name="emotional_constellation.png", mime="image/png")
